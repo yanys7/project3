@@ -15,7 +15,8 @@
 # include "wishart.hpp"
 # include "pdflib.hpp"
 # include "rnglib.hpp"
-#include <mvn.hpp>
+# include "PolyaGamma.h"
+# include <mvn.hpp>
 
 using namespace std;
 using namespace hmlp;
@@ -300,6 +301,9 @@ class Variables
       mu_mixture[ k ].resize( d, 1, 0.0 );
     }
 
+    w_pg.resize( q, 3, 0.0 );
+    b_multi.resize( q, 3, 0.5 );
+    a_multi.resize( q, 3, 0.5 );
     r_jk.resize( q, 0 );
 
   };
@@ -475,9 +479,9 @@ class Variables
        }
 
        if ( r_jk[ j ] == 1 ) {
-	  //MultiVariableNormal<T> my_mvn6( mu_mixture[ 1 ][ 0 ], Sigma_Mixture[ 1 ]( 0, 0 ) );
-	  //Data<T> bvn_sample = my_mvn6.SampleFrom( 1 );
-	  std::normal_distribution<T> dist_norm_m0( mu_mixture[ 1 ][ 0 ], std::sqrt( Sigma_Mixture[ 1 ]( 0, 0 ) ) );
+	        //MultiVariableNormal<T> my_mvn6( mu_mixture[ 1 ][ 0 ], Sigma_Mixture[ 1 ]( 0, 0 ) );
+	        //Data<T> bvn_sample = my_mvn6.SampleFrom( 1 );
+	        std::normal_distribution<T> dist_norm_m0( mu_mixture[ 1 ][ 0 ], std::sqrt( Sigma_Mixture[ 1 ]( 0, 0 ) ) );
           beta_m[ j ] = dist_norm_m0( generator );
           alpha_a[ j ] = 0;
        }
@@ -618,9 +622,41 @@ class Variables
      }
 
      /** update sigma_a */
-     std::gamma_distribution<T>  dist_a( 0.5 +  ha, 1.0 / ( beta_a[ 0 ] * beta_a[ 0 ] / 2.0 + la ) );
+     std::gamma_distribution<T> dist_a( 0.5 +  ha, 1.0 / ( beta_a[ 0 ] * beta_a[ 0 ] / 2.0 + la ) );
      sigma_a  = 1.0 / dist_a ( generator );
 
+     /** update w_pg */
+     PolyaGamma pg(1);
+     for ( int j = 0; j < q; j ++ ) 
+     {
+      w_pg( j, 0 ) = pg.draw( 1, b_multi( j, 0 ) );
+      if ( r_jk[ j ] == 0 ) 
+      {
+        w_pg( j, 1 ) = 0.0;
+        w_pg( j, 2 ) = 0.0;
+      }
+      if ( r_jk[ j ] == 1 )
+      {
+        w_pg( j, 1 ) = pg.draw( 1, b_multi( j, 1 ) );
+        w_pg( j, 2 ) = 0.0;
+      }
+      if ( r_jk[ j ] == 2 )
+      {
+        w_pg( j, 1 ) = pg.draw( 1, b_multi( j, 1 ) );
+        w_pg( j, 2 ) = pg.draw( 1, b_multi( j, 2 ) );
+      }
+     }
+
+     /** update b_multi */
+     for ( int j = 0; j < q; j ++ )
+     {
+       //V_w( j, j ) += 
+     }
+     //MultiVariableNormal<T> b0_mvn( temp, corrD );
+     //Data<T> invWishart_m = b0_mvn.Inverse();
+
+
+     
      /** update lambda */
      //T para_lambda = l_lambda - std::log( 1 - v_01 ) - std::log( 1 - v_10 ) - std::log( 1 - v_11 );
      //std::gamma_distribution<T> dist_lambda( 4 - 1 + h_lambda, 1.0 / para_lambda );
@@ -661,11 +697,7 @@ class Variables
 
       if ( it > burnIn && it % 10 == 0 )
       {
-        //std::ofstream outfile;
-        //std::string outfilename = std::string( "results_pY_" ) + std::to_string( (int)q1 ) + std::to_string( (int)q2 ) + std::string( "_" ) + 	 	std::to_string( (int)permute ) + std::string( ".txt" );
-        //outfile.open( outfilename.data(), std::ios_base::app );
 
-        //outfile.open("results_shore.txt", std::ios_base::app);
         for ( int i = 0; i < q; i +=1 )
         {
           my_samples( count, 3*i   ) = beta_m[ i ];
@@ -723,19 +755,11 @@ class Variables
 
     T lg  = 1.0;
 
-    T h_lambda = 1.0;
-
-    T l_lambda = 0.1;
-
     T sigma_a;
 
     T sigma_g;
 
     T sigma_e;
-
-    T lambda = 10.0;
-
-    T v_00, v_01, v_10, v_11;
 
     int df = 2;
 
@@ -801,6 +825,11 @@ class Variables
     hmlp::Data<T> Sigma_det;
     hmlp::Data<T> prop;
     hmlp::Data<T> w;
+
+    hmlp::Data<T> w_pg;
+    hmlp::Data<double> b_multi;
+    hmlp::Data<T> a_multi;
+    T sigma_multi;
 
     vector<size_t> r_jk;
 

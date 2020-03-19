@@ -2,6 +2,8 @@
 # ---------------------------
 cmake_minimum_required (VERSION 2.8)
 
+INCLUDE(GNUInstallDirs)
+
 # Configure the path structure.
 # ---------------------------
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -9,6 +11,8 @@ set (CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set (CMAKE_RELEASE_POSTFIX "")
 set (CMAKE_DEBUG_POSTFIX "-debug")
+
+SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 
 # Project specification.
 # ---------------------------
@@ -37,11 +41,20 @@ FIND_PACKAGE(GSL REQUIRED)
 MESSAGE(STATUS ${GSL_INCLUDE_DIRS})
 MESSAGE(STATUS ${GSL_LIBRARIES})
 
+# R dependency
+# ---------------------------
+FIND_PACKAGE(R REQUIRED)
+MESSAGE(STATUS ${R_ROOT_DIR})
+MESSAGE(STATUS ${R_INCLUDE_DIRS})
+MESSAGE(STATUS ${R_LIBRARIES})
+
+
+
 # Headers.
 # ---------------------------
 include_directories("include" "frame" "external") 
 include_directories("external/BayesLogit/src") 
-include_directories("/usr/share/R/include") 
+include_directories(${R_INCLUDE_DIRS}) 
 include_directories("$ENV{HOME}/Bayesian_mediation/RealSimulation/BF_simulation/Bayesian-Mediation-Analysis/gsl/include/gsl") 
 include_directories("$ENV{HOME}/Mixture_mediation/Gaussian-Mixture-Mediation/boost_1_61_0/boost/math/distributions")
 file (GLOB PROJECT_HDRS ${CMAKE_SOURCE_DIR}/include/*)
@@ -64,4 +77,5 @@ foreach( testsrc ${TEST_CXX_SRC} )
   add_executable( "${testexe}.x" ${testsrc} )
   target_link_libraries( "${testexe}.x" $ENV{PROJECT_NAME} )
   target_link_libraries( "${testexe}.x" ${GSL_LIBRARIES} )
+  target_link_libraries( "${testexe}.x" ${R_LIBRARIES} )
 endforeach()
