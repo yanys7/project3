@@ -211,26 +211,26 @@ class Variables
 		hmlp::Data<T> &userM,
 		hmlp::Data<T> &userC1,
 		hmlp::Data<T> &userC2,
- 	  	hmlp::Data<T> &userbeta_m,
+ 	  hmlp::Data<T> &userbeta_m,
 		hmlp::Data<T> &useralpha_a,
 		hmlp::Data<T> &userpi_mixtures,
-    		hmlp::Data<T> &userPsi,
-		size_t n, size_t w1, size_t w2, size_t q, size_t q1, size_t q2, size_t permute )
+    hmlp::Data<T> &userPsi,
+    hmlp::Data<T> &usercorrD,
+		size_t n, size_t w1, size_t w2, size_t q, size_t q1, size_t q2 )
 	  	: Y( userY ), A( userA ), M( userM ), C1( userC1 ), C2( userC2 ),
-	    	beta_m( userbeta_m ), alpha_a( useralpha_a ), pi_mixtures( userpi_mixtures ), Psi( userPsi )
+	    	beta_m( userbeta_m ), alpha_a( useralpha_a ), pi_mixtures( userpi_mixtures ), Psi( userPsi ),
+        corrD( usercorrD )
 
-{
+  {
     this->n = n;
     this->w1 = w1;
     this->w2 = w2;
     this->q = q;
     this->q1 = q1;
     this->q2 = q2;
-    this->permute = permute;
 
     /** Initialize my_samples here. */
     my_samples.resize( 499, 3 * q + 5, 0.0 );
-    //my_labels.resize( 1000, n_mixtures, 0.0 );
     my_probs.resize( 499, n_mixtures * q, 0.0 );
 
     unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
@@ -243,12 +243,6 @@ class Variables
     sigma_a  = 1.0 / dist_a ( generator );
     sigma_g  = 1.0 / dist_g ( generator );
     sigma_e  = 1.0 / dist_e ( generator );
-
-    beta_distribution<T> dist_v( 1 , lambda );
-    v_00 = dist_v( generator );
-    v_01 = dist_v( generator );
-    v_10 = dist_v( generator );
-    v_11 = dist_v( generator );
 
     /** resize beta_a */
     beta_a.resize( 0, 0 ); 
@@ -562,10 +556,6 @@ class Variables
        printf("Wishart %d \n", k); fflush( stdout ); }
      }
 
-     //Data<T> Vk_temp = Wishart_m[ 1 ];
-     //for ( size_t s = 0; s < Wishart_m[ 1 ].size(); s++ )
-     //  Vk_temp[ s ] /= ( r_count[ 1 ] + df + 1 + 1 );
-
      MultiVariableNormal<T> my_mvn10( temp, Wishart_m[ 1 ] );
      Data<T> invWishart_m = my_mvn10.Inverse();
 
@@ -589,10 +579,6 @@ class Variables
      if ( it % 50000 == 0 )  {
      Vk_temp.Print();
      printf("Wishart %d \n", 1); fflush( stdout ); }
-
-     //Vk_temp = Wishart_m[ 2 ];
-     //for ( size_t s = 0; s < Wishart_m[ 2 ].size(); s++ )
-     //  Vk_temp[ s ] /= ( r_count[ 2 ] + df + 1 + 1 );
 
      MultiVariableNormal<T> my_mvn12( temp, Wishart_m[ 2 ] );
      invWishart_m = my_mvn12.Inverse();
@@ -693,47 +679,14 @@ class Variables
         my_samples( count, 3* (int)q + 3 ) = pi_mixtures[ 2 ];
         my_samples( count, 3* (int)q + 4 ) = pi_mixtures[ 3 ];
 
-        /** relabeling algorithm */
-        //vector<pair<T, size_t>> ranks1;
-        //vector<pair<T, size_t>> ranks2;
-
-        //for ( size_t id = 0; id < values1.size(); id ++ )
-        //{
-        //  ranks1.push_back( pair<T, size_t>( values1[ id ], id ) );
-        //  ranks2.push_back( pair<T, size_t>( values2[ id ], id ) );
-        //}
-
-        //sort( ranks1.begin(), ranks1.end() );
-        //sort( ranks2.begin(), ranks2.end() );
-        //auto pair11 = ranks1[ 0 ];
-        //auto pair12 = ranks1[ 1 ];
-        //auto pair21 = ranks2[ 0 ];
-        //auto pair22 = ranks2[ 1 ];
-
-	//if ( ranks1[ 0 ].second == ranks2[ 0 ].second || ranks1[ 0 ].second == ranks2[ 1 ].second )
-	  //my_labels( count, 3 ) = ranks1[ 0 ].second;
-	//else if ( ranks1[ 1 ].second == ranks2[ 0 ].second || ranks1[ 1 ].second == ranks2[ 1 ].second )
-          //my_labels( count, 3 ) = ranks1[ 1 ].second;
-
-	//if ( ranks1[ 2 ].second == ranks2[ 2 ].second || ranks1[ 2 ].second == ranks2[ 3 ].second )
-     //my_labels( count, 0 ) = ranks1[ 2 ].second;
-  //else if ( ranks1[ 3 ].second == ranks2[ 2 ].second || ranks1[ 3 ].second == ranks2[ 3 ].second )
-          //my_labels( count, 0 ) = ranks1[ 3 ].second;
-
-	//if ( ranks1[ 2 ].second == my_labels( count, 0 ) ) my_labels( count, 1 ) = ranks1[ 3 ].second;
-	//else my_labels( count, 1 ) = ranks1[ 2 ].second;
-
-	//if ( ranks1[ 0 ].second == my_labels( count, 3 ) ) my_labels( count, 2 ) = ranks1[ 1 ].second;
-        //else my_labels( count, 2 ) = ranks1[ 0 ].second;
-
         count += 1;
 
       if ( count >= 499 )
       {
-        string my_samples_filename = string( "results_gmm_" ) + to_string( (int)q1 ) + to_string( (int)q2 ) + string( "_" ) + to_string( (int)permute ) + string( ".txt" );
+        string my_samples_filename = string( "results_" ) + to_string( (int)q1 ) + to_string( (int)q2 ) + string( ".txt" );
         my_samples.WriteFile( my_samples_filename.data() );
 
-	      string my_probs_filename = string( "probs_gmm_" ) + to_string( (int)q1 ) + to_string( (int)q2 ) + string( "_" ) + to_string( (int)permute ) + string( ".txt" );
+	      string my_probs_filename = string( "probs_" ) + to_string( (int)q1 ) + to_string( (int)q2 ) + string( ".txt" );
 	      //hmlp::Data<T> output_mean = Mean( my_probs );
 	      //output_mean.WriteFile( my_probs_filename.data() );
 	      my_probs.WriteFile( my_probs_filename.data() );
@@ -754,8 +707,6 @@ class Variables
     size_t q1;
 
     size_t q2;
-
-    size_t permute;
 
     //unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
     std::default_random_engine generator;
@@ -816,6 +767,8 @@ class Variables
 
     hmlp::Data<T> &C2;
 
+    hmlp::Data<T> &corrD;
+
     hmlp::Data<T> C1_2norm;
 
     hmlp::Data<T> C2_2norm;
@@ -856,17 +809,18 @@ class Variables
 
 template<typename T>
 void mcmc( hmlp::Data<T> &Y,
-	   hmlp::Data<T> &A,
-	   hmlp::Data<T> &M,
+	         hmlp::Data<T> &A,
+	         hmlp::Data<T> &M,
            hmlp::Data<T> &C1,
-	   hmlp::Data<T> &C2,
-	   hmlp::Data<T> &beta_m,
-	   hmlp::Data<T> &alpha_a,
+	         hmlp::Data<T> &C2,
+	         hmlp::Data<T> &beta_m,
+	         hmlp::Data<T> &alpha_a,
            hmlp::Data<T> &pi_mixtures,
            hmlp::Data<T> &Psi,
-	   size_t n, size_t w1, size_t w2, size_t q, size_t q1, size_t q2, size_t burnIn, size_t niter, size_t permute )
+           hmlp::Data<T> &corrD,
+	         size_t n, size_t w1, size_t w2, size_t q, size_t q1, size_t q2, size_t burnIn, size_t niter )
 {
-  Variables<T> variables( Y, A, M, C1, C2, beta_m, alpha_a, pi_mixtures, Psi, n, w1, w2, q, q1, q2, permute );
+  Variables<T> variables( Y, A, M, C1, C2, beta_m, alpha_a, pi_mixtures, Psi, corrD, n, w1, w2, q, q1, q2 );
 
   std::srand(std::time(nullptr));
 
