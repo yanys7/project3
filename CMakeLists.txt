@@ -40,6 +40,7 @@ MESSAGE(STATUS ${GSL_LIBRARIES})
 # Headers.
 # ---------------------------
 include_directories("include" "frame" "external") 
+include_directories("external/BayesLogit/src") 
 include_directories("$ENV{HOME}/Bayesian_mediation/RealSimulation/BF_simulation/Bayesian-Mediation-Analysis/gsl/include/gsl") 
 include_directories("$ENV{HOME}/Mixture_mediation/Gaussian-Mixture-Mediation/boost_1_61_0/boost/math/distributions")
 file (GLOB PROJECT_HDRS ${CMAKE_SOURCE_DIR}/include/*)
@@ -50,6 +51,7 @@ install (FILES ${PROJECT_HDRS} DESTINATION ${CMAKE_BINARY_DIR}/include)
 # ---------------------------
 file (GLOB CXX_SRC ${CMAKE_SOURCE_DIR}/src/*.cpp)
 file (GLOB EXT_CXX_SRC ${CMAKE_SOURCE_DIR}/external/*.cpp)
+file (GLOB EXT_CXX_SRC ${CMAKE_SOURCE_DIR}/external/BayesLogit/src/*.cpp)
 add_library ($ENV{PROJECT_NAME} STATIC ${CXX_SRC} ${EXT_CXX_SRC})
 
 # Build the executable files.
