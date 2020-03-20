@@ -26,7 +26,6 @@ namespace hmlp
 {
 namespace mcmc
 {
-
 template <typename RealType = double>
 class beta_distribution
 {
@@ -343,8 +342,8 @@ class Variables
 
      if ( it % 50000 == 0 )
      {
-       printf( "Iter %4lu sigma_e %.3E sigma_g %.3E sigma_a %.3E pi_mixtures1 %.3E pi_mixtures2 %.3E pi_mixtures3 %.3E pi_mixtures4 %.3E \n", 
-       it, sigma_e, sigma_g, sigma_a, pi_mixtures[ 0 ], pi_mixtures[ 1 ], pi_mixtures[ 2 ], pi_mixtures[ 3 ] ); fflush( stdout ); 
+       //printf( "Iter %4lu sigma_e %.3E sigma_g %.3E sigma_a %.3E pi_mixtures1 %.3E pi_mixtures2 %.3E pi_mixtures3 %.3E pi_mixtures4 %.3E \n", 
+       //it, sigma_e, sigma_g, sigma_a, pi_mixtures[ 0 ], pi_mixtures[ 1 ], pi_mixtures[ 2 ], pi_mixtures[ 3 ] ); fflush( stdout ); 
      }
      /** Update res1, res2 */
      if ( it == 0 ) Residual( it );
@@ -660,6 +659,8 @@ class Variables
      xgemm( "N", "N", q, 3, q, 1.0, corrD.data(), q,
         a_multi.data(), q, 1.0, corrD_a.data(), q );
 
+     hmlp::Data<T> corrD_a_orig; corrD_a_orig = corrD_a;
+
      for ( int j = 0; j < q; j ++ )
      {
        corrD_a( j, 0 ) -= 0.5;
@@ -673,7 +674,7 @@ class Variables
        }
        if ( r_jk[ j ] > 1 )
        {
-         corrD_a( j, 1 ) -=0.5;
+         corrD_a( j, 1 ) -= 0.5;
        }
        if ( r_jk[ j ] == 2 )
        {
@@ -687,7 +688,7 @@ class Variables
 
      std::vector<size_t> I(q);
      std::vector<size_t> J(1);
-     for ( size_t i = 0; i < q; i ++) I[ i ] = i;
+     for ( size_t i = 0; i < q; i ++ ) I[ i ] = i;
      for ( size_t k = 0; k < 3; k ++ )
      {
        hmlp::Data<T> V_w = corrD;
@@ -747,7 +748,7 @@ class Variables
      {
        for ( size_t j = 0; j < q; j ++ )
        {
-         lu1 += b_multi( j, k ) * corrD_b( j, k );
+         lu1 += ( b_multi( j, k ) - a_multi( j, k ) ) * ( corrD_b( j, k ) - corrD_a_orig( j, k ) );
        }
      }
      lu1 = 1.0 / ( lu1 / 2.0 + lu );
