@@ -74,7 +74,7 @@ int main( int argc, char *argv[] )
   hmlp::Data<T> alpha_a( 1, q ); 
   hmlp::Data<T> pi_mixtures( 1, n_mixtures );
   hmlp::Data<T> Psi( d, d );
-  hmlp::Data<T> corrD( q, q );
+  hmlp::Data<T> corrD_orig( q, q );
 
   Y.readmatrix( n, 1, Y_filename );
   M.readmatrix( n, q, M_filename );
@@ -86,10 +86,10 @@ int main( int argc, char *argv[] )
   alpha_a.readmatrix( 1, q, alpha_a_filename );
   pi_mixtures.readmatrix( 1, n_mixtures, pi_mixtures_filename );
   Psi.readmatrix( d, d, Psi_filename );
-  corrD.readmatrix( q, q, D_filename );
+  corrD_orig.readmatrix( q, q, D_filename );
 
 
-  mcmc::mcmc<T>( Y, A, M, C1, C2, beta_m, alpha_a, pi_mixtures, Psi, corrD, n, w1, w2, q, q1, q2, burnIn, niter );
+  mcmc::mcmc<T>( Y, A, M, C1, C2, beta_m, alpha_a, pi_mixtures, Psi, corrD_orig, n, w1, w2, q, q1, q2, burnIn, niter );
 
   return 0;
 };

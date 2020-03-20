@@ -199,6 +199,11 @@ hmlp::Data<T> Mean( hmlp::Data<T> &A )
   return mean;
 }; /** end Mean() */
 
+template<typename T>
+T logit( T &value ) 
+{
+  return std::exp( value ) / ( 1 + std::exp( value ) );
+}
 
 
 template<typename T>
@@ -216,11 +221,11 @@ class Variables
 		hmlp::Data<T> &useralpha_a,
 		hmlp::Data<T> &userpi_mixtures,
     hmlp::Data<T> &userPsi,
-    hmlp::Data<T> &usercorrD,
+    hmlp::Data<T> &usercorrD_orig,
 		size_t n, size_t w1, size_t w2, size_t q, size_t q1, size_t q2 )
 	  	: Y( userY ), A( userA ), M( userM ), C1( userC1 ), C2( userC2 ),
 	    	beta_m( userbeta_m ), alpha_a( useralpha_a ), pi_mixtures( userpi_mixtures ), Psi( userPsi ),
-        corrD( usercorrD )
+        corrD_orig( usercorrD_orig )
 
   {
     this->n = n;
@@ -229,6 +234,8 @@ class Variables
     this->q = q;
     this->q1 = q1;
     this->q2 = q2;
+
+    corrD = corrD_orig;
 
     /** Initialize my_samples here. */
     my_samples.resize( 499, 3 * q + 5, 0.0 );
@@ -405,7 +412,7 @@ class Variables
 
        for ( size_t k = 0; k < n_mixtures; k ++ ) 
        {
-         prop[ k ] = std::log( pi_mixtures[ k ] );
+         prop[ k ] = std::log( pi_mixtures( j, k ) );
        }
 
        vector<Data<T>> Sigma_temp( n_mixtures );
@@ -627,10 +634,10 @@ class Variables
 
      /** update w_pg */
      PolyaGamma pg(1);
-     for ( int j = 0; j < q; j ++ ) 
+     for ( int j = 0; j < q; j ++ )
      {
       w_pg( j, 0 ) = pg.draw( 1, b_multi( j, 0 ) );
-      if ( r_jk[ j ] == 0 ) 
+      if ( r_jk[ j ] == 0 )
       {
         w_pg( j, 1 ) = 0.0;
         w_pg( j, 2 ) = 0.0;
@@ -640,7 +647,7 @@ class Variables
         w_pg( j, 1 ) = pg.draw( 1, b_multi( j, 1 ) );
         w_pg( j, 2 ) = 0.0;
       }
-      if ( r_jk[ j ] == 2 )
+      if ( r_jk[ j ] == 2 || r_jk[ j ] == 3 )
       {
         w_pg( j, 1 ) = pg.draw( 1, b_multi( j, 1 ) );
         w_pg( j, 2 ) = pg.draw( 1, b_multi( j, 2 ) );
@@ -648,51 +655,120 @@ class Variables
      }
 
      /** update b_multi */
+     /** corrD * a_multi */
+     hmlp::Data<T> corrD_a; corrD_a.resize( q, 3, 0 );
+     xgemm( "N", "N", q, 3, q, 1.0, corrD.data(), q,
+        a_multi.data(), q, 1.0, corrD_a.data(), q );
+
      for ( int j = 0; j < q; j ++ )
      {
-       //V_w( j, j ) += 
+       corrD_a( j, 0 ) -= 0.5;
+       if ( r_jk[ j ] == 0 ) 
+       {
+         corrD_a( j, 0 ) += 1;
+       }
+       if ( r_jk[ j ] == 1 )
+       {
+         corrD_a( j, 1 ) += 0.5;
+       }
+       if ( r_jk[ j ] > 1 )
+       {
+         corrD_a( j, 1 ) -=0.5;
+       }
+       if ( r_jk[ j ] == 2 )
+       {
+         corrD_a( j, 2 ) += 0.5;
+       }
+       if ( r_jk[ j ] > 2 )
+       {
+         corrD_a( j, 2 ) -= 0.5;
+       }
      }
-     //MultiVariableNormal<T> b0_mvn( temp, corrD );
-     //Data<T> invWishart_m = b0_mvn.Inverse();
 
+     std::vector<size_t> I(q);
+     std::vector<size_t> J(1);
+     for ( size_t i = 0; i < q; i ++) I[ i ] = i;
+     for ( size_t k = 0; k < 3; k ++ )
+     {
+       hmlp::Data<T> V_w = corrD;
+       for ( size_t j = 0; j < q; j ++ )
+       {
+         V_w( j, j ) += w_pg( j, k );
+       }
+       J[ 0 ] = k;
+       MultiVariableNormal<T> b_mvn0( V_w( I, J ), V_w );
+       hmlp::Data<T> invV_w = b_mvn0.Inverse();
+       auto tmp = corrD_a( I, J );
+       hmlp::Data<T> mu_w = invV_w * tmp;
 
+       MultiVariableNormal<T> b_mvn1( mu_w, invV_w );
+       hmlp::Data<T> mvn_sample = b_mvn1.SampleFrom( 1 );
+       for ( size_t j = 0; j < q; j ++ )
+       {
+         b_multi( j, k ) = mvn_sample[ j ];
+       }
+     }
+
+     /** update a_multi */
+     /** corrD * b_multi */
+     hmlp::Data<T> corrD_b; corrD_b.resize( q, 3, 0 );
+     xgemm( "N", "N", q, 3, q, 1.0, corrD.data(), q,
+        b_multi.data(), q, 1.0, corrD_b.data(), q );
+
+     hmlp::Data<T> V_a = corrD;
+     for ( size_t j = 0; j < q; j ++ )
+     {
+       V_a( j, j ) += 1.0 / sigma_a_multi;
+     }
+
+     MultiVariableNormal<T> a_mvn0( V_a( I, J ), V_a );
+     hmlp::Data<T> invV_a = a_mvn0.Inverse();
      
-     /** update lambda */
-     //T para_lambda = l_lambda - std::log( 1 - v_01 ) - std::log( 1 - v_10 ) - std::log( 1 - v_11 );
-     //std::gamma_distribution<T> dist_lambda( 4 - 1 + h_lambda, 1.0 / para_lambda );
-     //lambda = dist_lambda( generator );
-     //printf( "Iter %4lu lambda %.4E \n", it, lambda); fflush( stdout );
-
-     /** update v */
-     //beta_distribution<T> dist_v11( r_count[ 0 ] + 1, r_count[ 1 ] + r_count[ 2 ] + r_count[ 3 ] + lambda );
-     //v_11 = dist_v11( generator );
-
-     //beta_distribution<T> dist_v10( r_count[ 1 ] + 1 , r_count[ 2 ] + r_count[ 3 ] + lambda );
-     //v_10 = dist_v10( generator );
-
-     //beta_distribution<T> dist_v01( r_count[ 2 ] + 1 , r_count[ 3 ] + lambda );
-     //v_01 = dist_v01( generator );
-
-     //beta_distribution<T> dist_v00( r_count[ 3 ] + 1 , lambda );
-     //v_00 = dist_v00( generator );
-
-     /** update pi_mixtures */
-     //pi_mixtures[ 0 ] = v_11;
-     //pi_mixtures[ 1 ] = v_10 * ( 1 - v_11 );
-     //pi_mixtures[ 2 ] = v_01 * ( 1 - v_11 ) * ( 1 - v_10 );
-     //pi_mixtures[ 3 ] = v_00 * ( 1 - v_11 ) * ( 1 - v_10 ) * ( 1 - v_01 ); 
-     //pi_mixtures[ 3 ] = 1 - pi_mixtures[ 0 ] - pi_mixtures[ 1 ] - pi_mixtures[ 2 ];
-
-     /** update pi_mixtures */
-     T sum_pi = 0.0;
-     for ( size_t k = 0; k < n_mixtures; k ++ ) {
-     	std::gamma_distribution<T> dist_pi( S_k[ k ] + r_count[ k ], 1.0 );
-     	pi_mixtures[ k ] = dist_pi( generator );
-        sum_pi += pi_mixtures[ k ];
+     for ( size_t k = 0; k < 3; k ++ )
+     {
+       J[ 0 ] = k;
+       auto tmp = corrD_b( I, J );
+       hmlp::Data<T> mu_a = invV_a * tmp;
+       MultiVariableNormal<T> a_mvn1( mu_a, invV_a );
+       hmlp::Data<T> mvn_sample = a_mvn1.SampleFrom( 1 );
+       for ( size_t j = 0; j < q; j ++ )
+       {
+         a_multi( j, k ) = mvn_sample[ j ];
+       }
      }
 
-     for ( size_t k = 0; k < n_mixtures; k ++ ) {
-	     pi_mixtures[ k ] /= sum_pi;
+     /** update sigma_multi */
+     T hu1 = hu + q / 2.0 * 3;
+     T lu1 = 0.0;
+     hmlp::Data<T> bcorrDb; bcorrDb.resize( 3, 1, 0 );
+     //xgemm( "T", "N", 3, 3, q, 1.0, b_multi.data(), q,
+     //   corrD_b.data(), q, 1.0, bcorrDb.data(), 3 );
+     for ( size_t k = 0; k < 3; k ++ )
+     {
+       for ( size_t j = 0; j < q; j ++ )
+       {
+         lu1 += b_multi( j, k ) * corrD_b( j, k );
+       }
+     }
+     lu1 = 1.0 / ( lu1 / 2.0 + lu );
+     std::gamma_distribution<T> dist_u( hu1, lu1 );
+     sigma_multi  = 1.0 / dist_u( generator );
+
+     for ( size_t j = 0; j < q; j ++ )
+     {
+       for ( size_t k = 0; k < q; k ++ ) 
+       {
+         corrD( j, k ) = corrD_orig( j, k ) / sigma_multi;
+       }
+     }
+
+     /** update pi_mixtures */
+     for ( int j = 0; j < q; j ++ )
+     {
+       pi_mixtures( j, 0 ) = logit( b_multi( j, 0 ) );
+       pi_mixtures( j, 1 ) = ( 1.0 - logit( b_multi( j, 0 ) ) ) *  logit( b_multi( j, 1 ) );
+       pi_mixtures( j, 2 ) = ( 1.0 - logit( b_multi( j, 0 ) ) ) * ( 1.0 - logit( b_multi( j, 1 ) ) ) * logit( b_multi ( j, 2 ) );
+       pi_mixtures( j, 3 ) = 1.0 - pi_mixtures( j, 0 ) - pi_mixtures( j, 1 ) - pi_mixtures( j, 2 );
      }
 
       if ( it > burnIn && it % 10 == 0 )
@@ -755,11 +831,17 @@ class Variables
 
     T lg  = 1.0;
 
+    T hu = 2.0;
+
+    T lu = 1.0;
+
     T sigma_a;
 
     T sigma_g;
 
     T sigma_e;
+
+    T sigma_a_multi = 10.0;
 
     int df = 2;
 
@@ -791,7 +873,9 @@ class Variables
 
     hmlp::Data<T> &C2;
 
-    hmlp::Data<T> &corrD;
+    hmlp::Data<T> &corrD_orig;
+
+    hmlp::Data<T> corrD;
 
     hmlp::Data<T> C1_2norm;
 
@@ -846,10 +930,10 @@ void mcmc( hmlp::Data<T> &Y,
 	         hmlp::Data<T> &alpha_a,
            hmlp::Data<T> &pi_mixtures,
            hmlp::Data<T> &Psi,
-           hmlp::Data<T> &corrD,
+           hmlp::Data<T> &corrD_orig,
 	         size_t n, size_t w1, size_t w2, size_t q, size_t q1, size_t q2, size_t burnIn, size_t niter )
 {
-  Variables<T> variables( Y, A, M, C1, C2, beta_m, alpha_a, pi_mixtures, Psi, corrD, n, w1, w2, q, q1, q2 );
+  Variables<T> variables( Y, A, M, C1, C2, beta_m, alpha_a, pi_mixtures, Psi, corrD_orig, n, w1, w2, q, q1, q2 );
 
   std::srand(std::time(nullptr));
 
