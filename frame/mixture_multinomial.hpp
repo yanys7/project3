@@ -16,6 +16,7 @@
 # include "pdflib.hpp"
 # include "rnglib.hpp"
 # include "PolyaGamma.h"
+# include "polyagamma_wrapper.h"
 # include <mvn.hpp>
 
 using namespace std;
@@ -194,16 +195,21 @@ hmlp::Data<T> Mean( hmlp::Data<T> &A )
     mean( 0 , (int)j ) /= m;
 
   }
-  
+
   return mean;
 }; /** end Mean() */
 
 template<typename T>
-T logit( T &value ) 
+T sigmoid( T &value )
 {
-  return std::exp( value ) / ( 1 + std::exp( value ) );
+  return std::exp( value ) / ( static_cast<T>(1) + std::exp( value ) );
 }
 
+template<typename T>
+T logit( T value )
+{
+  return std::log( value / ( static_cast<T>(1) - value ) );
+}
 
 template<typename T>
 class Variables
@@ -308,8 +314,9 @@ class Variables
     }
 
     w_pg.resize( q, 3, 0.0 );
-    b_multi.resize( q, 3, 0.5 );
+    b_multi.resize( q, 3, -4.0 );
     a_multi.resize( q, 3, 0.5 );
+
     r_jk.resize( q, 0 );
 
   };
@@ -329,24 +336,40 @@ class Variables
 
     /** res2 = M - A * alpha_a - C * alpha_c */
     res2 = M;
-    xgemm( "N", "N", n, q, 1, -1.0, A.data(), n, 
+    xgemm( "N", "N", n, q, 1, -1.0, A.data(), n,
         alpha_a.data(), 1, 1.0, res2.data(), n );
 
-    //xgemm( "N", "N", n, q, w2, -1.0, C2.data(), n, 
-    //    alpha_c.data(), w2, 1.0, res2.data(), n ); 
+    //xgemm( "N", "N", n, q, w2, -1.0, C2.data(), n,
+    //    alpha_c.data(), w2, 1.0, res2.data(), n );
   };
 
 
    void Iteration( size_t burnIn, size_t it )
    {
 
-     if ( it % 50000 == 0 )
+     if ( it % 10 == 0 )
      {
-       //printf( "Iter %4lu sigma_e %.3E sigma_g %.3E sigma_a %.3E pi_mixtures1 %.3E pi_mixtures2 %.3E pi_mixtures3 %.3E pi_mixtures4 %.3E \n", 
-       //it, sigma_e, sigma_g, sigma_a, pi_mixtures[ 0 ], pi_mixtures[ 1 ], pi_mixtures[ 2 ], pi_mixtures[ 3 ] ); fflush( stdout ); 
+       //printf( "Iter %4lu sigma_multi %.3E sigma_g %.3E sigma_a %.3E pi_mixtures1 %.3E pi_mixtures2 %.3E pi_mixtures3 %.3E pi_mixtures4 %.3E \n", 
+       //it, sigma_multi, sigma_g, sigma_a, pi_mixtures[ 0 ], pi_mixtures[ 1 ], pi_mixtures[ 2 ], pi_mixtures[ 3 ] ); fflush( stdout ); 
      }
      /** Update res1, res2 */
-     if ( it == 0 ) Residual( it );
+     if ( it == 0 )
+     {
+       Residual( it );
+       
+       for ( int j = 0; j < q; j ++ )
+       {
+         a_multi( j, 0 ) = logit( 0.01 );
+         a_multi( j, 1 ) = logit( 0.05 / ( 1.0 - 0.01) );
+         a_multi( j, 2 ) = logit( 0.05 / ( 1.0 - 0.01 - 0.05 ) );
+       }
+
+       corrD_a.resize( q, 3, 0 );
+       xgemm( "N", "N", q, 3, q, 1.0, corrD_orig.data(), q,
+         a_multi.data(), q, 1.0, corrD_a.data(), q );
+
+       corrD_a_orig = corrD_a;
+     }
 
      /** sigma_e and sigma_g */
      T he1 = he + n / 2.0;
@@ -367,7 +390,6 @@ class Variables
      /** var_a */
      var_a.resize( 1, 1, 0.0 );
      var_a[ 0 ] = sigma_e / ( sigma_e / sigma_a + A2norm[ 0 ] ); 
-     //printf( "Iter %4lu var_a %.3E", it, var_a[ 0 ] ); fflush( stdout );
 
      hmlp::Data<T> temp( d, 1, 0.0 );
      for ( size_t k = 0; k < 1; k ++ )
@@ -387,7 +409,10 @@ class Variables
      MultiVariableNormal<T >my_mvn2( mu2, sigma2 );
      Vk_det[ 2 ] = my_mvn2.LogDeterminant();
 
-     //printf( "Vk_det0 %.4E Vk_det1 %.4E \n", Vk_det[ 0 ], Vk_det[ 1 ] ); fflush( stdout );
+     if ( it % 100 == 0 )
+     {
+       printf( "sigma_multi %.4E \n", sigma_multi ); fflush( stdout );
+     }
 
      vector<Data<T>> Wishart_m( n_mixtures );
      for ( size_t k = 0; k < n_mixtures; k ++ ) 
@@ -532,7 +557,7 @@ class Variables
        r_count[ r_jk[ j ] ] += 1;
      }
 
-     if ( it % 50000 == 0 ) {
+     if ( it % 100 == 0 ) {
      printf( "r_jk0 %d r_count1 %d r_count2 %d r_count3 %d r_count4 %d \n", r_jk[ 0 ], r_count[ 0 ], r_count[ 1 ], r_count[ 2 ], r_count[ 3 ] ); fflush( stdout );
      }
 
@@ -633,8 +658,10 @@ class Variables
 
      /** update w_pg */
      PolyaGamma pg(1);
+     int num_ = 1;
      for ( int j = 0; j < q; j ++ )
      {
+       //rpg_devroye( & ( w_pg( j, 0 ) ), & num_, & ( b_multi( j, 0 ) ), & num_ );
       w_pg( j, 0 ) = pg.draw( 1, b_multi( j, 0 ) );
       if ( r_jk[ j ] == 0 )
       {
@@ -651,20 +678,29 @@ class Variables
         w_pg( j, 1 ) = pg.draw( 1, b_multi( j, 1 ) );
         w_pg( j, 2 ) = pg.draw( 1, b_multi( j, 2 ) );
       }
+
+
+      if ( it % 1000 == 0 ) {
+        if ( j % 200 == 0 ) {
+        printf( "r_jk0 %d w_pg0 %.2E w_pg1 %.2E w_pg2 %.2E \n", r_jk[ j ], w_pg( j, 0 ), w_pg( j, 1 ), w_pg( j, 2 ) ); fflush( stdout );
+        }
+      }
      }
 
      /** update b_multi */
      /** corrD * a_multi */
-     hmlp::Data<T> corrD_a; corrD_a.resize( q, 3, 0 );
-     xgemm( "N", "N", q, 3, q, 1.0, corrD.data(), q,
-        a_multi.data(), q, 1.0, corrD_a.data(), q );
-
-     hmlp::Data<T> corrD_a_orig; corrD_a_orig = corrD_a;
+     for ( size_t j = 0; j < q; j ++ )
+     {
+       for ( size_t k = 0; k < 3; k ++ )
+       {
+         corrD_a( j, k ) = corrD_a_orig( j, k ) / sigma_multi;
+       }
+     }
 
      for ( int j = 0; j < q; j ++ )
      {
        corrD_a( j, 0 ) -= 0.5;
-       if ( r_jk[ j ] == 0 ) 
+       if ( r_jk[ j ] == 0 )
        {
          corrD_a( j, 0 ) += 1;
        }
@@ -689,33 +725,53 @@ class Variables
      std::vector<size_t> I(q);
      std::vector<size_t> J(1);
      for ( size_t i = 0; i < q; i ++ ) I[ i ] = i;
-     for ( size_t k = 0; k < 3; k ++ )
+
+     for ( int k = 0; k < 3; k ++ )
      {
        hmlp::Data<T> V_w = corrD;
-       for ( size_t j = 0; j < q; j ++ )
+       for ( int j = 0; j < q; j ++ )
        {
          V_w( j, j ) += w_pg( j, k );
        }
        J[ 0 ] = k;
-       MultiVariableNormal<T> b_mvn0( V_w( I, J ), V_w );
-       hmlp::Data<T> invV_w = b_mvn0.Inverse();
-       auto tmp = corrD_a( I, J );
-       hmlp::Data<T> mu_w = invV_w * tmp;
 
-       MultiVariableNormal<T> b_mvn1( mu_w, invV_w );
-       hmlp::Data<T> mvn_sample = b_mvn1.SampleFrom( 1 );
-       for ( size_t j = 0; j < q; j ++ )
+       //MultiVariableNormal<T> b_mvn0( V_w( I, J ), V_w );
+       //hmlp::Data<T> invV_w = b_mvn0.Inverse();
+       //auto tmp = corrD_a( I, J );
+       //hmlp::Data<T> mu_w = invV_w * tmp;
+
+       //MultiVariableNormal<T> b_mvn1( mu_w, invV_w );
+       //hmlp::Data<T> mvn_sample = b_mvn1.SampleFrom( 1 );
+
+       //auto tmp = corrD_a(I, J);
+       MultiVariableNormal<T> b_mvn(corrD_a(I, J), V_w);
+       hmlp::Data<T> mvn_sample = b_mvn.SampleFromInverseCov(1);
+
+       for ( int j = 0; j < q; j ++ )
        {
          b_multi( j, k ) = mvn_sample[ j ];
+         if ( j % 200 == 0 && it % 1000 == 0 ) {
+           printf( "it %d b_multi0 %.2E b_multi1 %.2E b_multi2 %.2E \n", it, b_multi( j, 0 ), b_multi( j, 1 ), b_multi( j, 2 ) ); fflush( stdout );
+         }
        }
      }
 
      /** update a_multi */
      /** corrD * b_multi */
-     hmlp::Data<T> corrD_b; corrD_b.resize( q, 3, 0 );
-     xgemm( "N", "N", q, 3, q, 1.0, corrD.data(), q,
-        b_multi.data(), q, 1.0, corrD_b.data(), q );
+     hmlp::Data<T> corrD_b_orig; corrD_b_orig.resize( q, 3, 0 );
+     xgemm( "N", "N", q, 3, q, 1.0, corrD_orig.data(), q,
+        b_multi.data(), q, 1.0, corrD_b_orig.data(), q );
 
+     hmlp::Data<T> corrD_b; corrD_b.resize( q, 3, 0 );
+     for ( size_t j = 0; j < q; j ++ )
+     {
+       for ( size_t k = 0; k < 3; k ++ )
+       {
+         corrD_b( j, k ) = corrD_b_orig( j, k ) / sigma_multi;
+       }
+     }
+
+     if ( false ) {
      hmlp::Data<T> V_a = corrD;
      for ( size_t j = 0; j < q; j ++ )
      {
@@ -724,7 +780,7 @@ class Variables
 
      MultiVariableNormal<T> a_mvn0( V_a( I, J ), V_a );
      hmlp::Data<T> invV_a = a_mvn0.Inverse();
-     
+
      for ( size_t k = 0; k < 3; k ++ )
      {
        J[ 0 ] = k;
@@ -737,6 +793,7 @@ class Variables
          a_multi( j, k ) = mvn_sample[ j ];
        }
      }
+     }
 
      /** update sigma_multi */
      T hu1 = hu + q / 2.0 * 3;
@@ -748,7 +805,7 @@ class Variables
      {
        for ( size_t j = 0; j < q; j ++ )
        {
-         lu1 += ( b_multi( j, k ) - a_multi( j, k ) ) * ( corrD_b( j, k ) - corrD_a_orig( j, k ) );
+         lu1 += ( b_multi( j, k ) - a_multi( j, k ) ) * ( corrD_b_orig( j, k ) - corrD_a_orig( j, k ) );
        }
      }
      lu1 = 1.0 / ( lu1 / 2.0 + lu );
@@ -766,10 +823,14 @@ class Variables
      /** update pi_mixtures */
      for ( int j = 0; j < q; j ++ )
      {
-       pi_mixtures( j, 0 ) = logit( b_multi( j, 0 ) );
-       pi_mixtures( j, 1 ) = ( 1.0 - logit( b_multi( j, 0 ) ) ) *  logit( b_multi( j, 1 ) );
-       pi_mixtures( j, 2 ) = ( 1.0 - logit( b_multi( j, 0 ) ) ) * ( 1.0 - logit( b_multi( j, 1 ) ) ) * logit( b_multi ( j, 2 ) );
+       pi_mixtures( j, 0 ) = sigmoid( b_multi( j, 0 ) );
+       pi_mixtures( j, 1 ) = ( 1.0 - sigmoid( b_multi( j, 0 ) ) ) *  sigmoid( b_multi( j, 1 ) );
+       pi_mixtures( j, 2 ) = ( 1.0 - sigmoid( b_multi( j, 0 ) ) ) * ( 1.0 - sigmoid( b_multi( j, 1 ) ) ) * sigmoid( b_multi ( j, 2 ) );
        pi_mixtures( j, 3 ) = 1.0 - pi_mixtures( j, 0 ) - pi_mixtures( j, 1 ) - pi_mixtures( j, 2 );
+
+       if ( j % 200 == 0 && it % 1000 == 0 ) {
+         printf( "it %d pi0 %.2E pi1 %.2E pi2 %.2E \n", it, pi_mixtures( j, 0 ), pi_mixtures( j, 1 ), pi_mixtures( j, 2 ) ); fflush( stdout );
+       }
      }
 
       if ( it > burnIn && it % 10 == 0 )
@@ -914,7 +975,10 @@ class Variables
     hmlp::Data<T> w_pg;
     hmlp::Data<double> b_multi;
     hmlp::Data<T> a_multi;
-    T sigma_multi;
+    T sigma_multi = 1.0;
+
+    hmlp::Data<T> corrD_a;
+    hmlp::Data<T> corrD_a_orig;
 
     vector<size_t> r_jk;
 

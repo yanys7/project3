@@ -14,6 +14,11 @@
 #include <hbwmalloc.h>
 #endif
 
+/* Include R headers. */
+#include <R.h>
+#include <Rembedded.h>
+#include <Rdefines.h>
+
 #define GFLOPS 1073741824 
 #define TOLERANCE 1E-13
 
@@ -35,6 +40,18 @@ int main( int argc, char *argv[] )
   size_t n_mixtures = 4;
   size_t d = 2;
 
+  /* Must initialize R package before calling any R functions!!! */
+  Rf_initEmbeddedR(argc, argv);
+  GetRNGstate();
+  PutRNGstate();
+  
+  //for (int32_t iter = 0; iter < 10; iter ++)
+  //{
+  //  GetRNGstate();
+  //  std::cout << "runif(0, 1):"  << runif(0, 1) << std::endl;
+  //  PutRNGstate();
+  //}
+
 	if ( argc == 19 )
 	{
 		/** read parameters */
@@ -51,7 +68,6 @@ int main( int argc, char *argv[] )
 	{
 		printf( "\n[usage] ./mcmc.x <n> <w> <q> <q1> <niter>\n\n" );
   }
-
 
   std::string Y_filename(       argv[ 9 ] );
   std::string M_filename(       argv[ 10 ] );
@@ -72,7 +88,7 @@ int main( int argc, char *argv[] )
 
   hmlp::Data<T> beta_m( 1, q );
   hmlp::Data<T> alpha_a( 1, q ); 
-  hmlp::Data<T> pi_mixtures( 1, n_mixtures );
+  hmlp::Data<T> pi_mixtures( q, n_mixtures );
   hmlp::Data<T> Psi( d, d );
   hmlp::Data<T> corrD_orig( q, q );
 
@@ -84,12 +100,13 @@ int main( int argc, char *argv[] )
 
   beta_m.readmatrix( 1, q, beta_m_filename );
   alpha_a.readmatrix( 1, q, alpha_a_filename );
-  pi_mixtures.readmatrix( 1, n_mixtures, pi_mixtures_filename );
+  pi_mixtures.readmatrix( q, n_mixtures, pi_mixtures_filename );
   Psi.readmatrix( d, d, Psi_filename );
   corrD_orig.readmatrix( q, q, D_filename );
 
 
   mcmc::mcmc<T>( Y, A, M, C1, C2, beta_m, alpha_a, pi_mixtures, Psi, corrD_orig, n, w1, w2, q, q1, q2, burnIn, niter );
 
+  Rf_endEmbeddedR(0);
   return 0;
 };

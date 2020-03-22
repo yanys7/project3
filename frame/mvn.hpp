@@ -37,9 +37,22 @@ class MultiVariableNormal
       return inv;
     };
 
+    Data<T> Solve(Data<T> const & b)
+    {
+      Data<T> x = b;
+      xtrsm( "Left", "Lower", "No Transpose", "Not Unit", d, x.col(), 
+          1.0, Sigma.data(), d, x.data(), d );
+      xtrsm( "Left", "Lower", "Transpose", "Not Unit", d, x.col(), 
+          1.0, Sigma.data(), d, x.data(), d );
+      return x;
+    }
+
+    /*
+     * X = MVN(mv, Sigma)
+     */ 
     Data<T> SampleFrom( uint64_t num_of_samples )
     {
-      Data<T> X( d, num_of_samples );
+      Data<T> X(d, num_of_samples);
       /** TODO: Normal( 0, 1 ) */
       X.randn();
       /** Compute L * X using TRMM. */
@@ -53,6 +66,26 @@ class MultiVariableNormal
 
       return X;
     };
+
+    /*
+     * X = MVN(inv(Sigma) * mv, inv(Sigma))
+     */ 
+    Data<T> SampleFromInverseCov( uint64_t num_of_samples )
+    {
+      Data<T> X(d, num_of_samples);
+      X.randn();
+      /** L^{-T}X using TRSM. */
+      xtrsm( "Left", "Lower", "Transpose", "Not Unit", d, num_of_samples, 
+          1.0, Sigma.data(), d, X.data(), d);
+      /* y = inv(Sigma) * mu */
+      Data<T> y = Solve(mu);
+      /** X = mu + X; */
+      for ( uint64_t j = 0; j < num_of_samples; j ++)
+      {
+        for ( uint64_t i = 0; i < d; i ++ ) X( i, j ) += y[ i ];
+      }
+      return X;
+    }
 
   private:
 

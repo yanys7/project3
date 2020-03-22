@@ -25,7 +25,7 @@ find_program (ICC_PATH "icc")
 find_program (ICPC_PATH "icpc")
 set (CMAKE_C_COMPILER ${ICC_PATH})
 set (CMAKE_CXX_COMPILER ${ICPC_PATH})
-set (PROJECT_CFLAGS "-std=c++11 -O3 -qopenmp -DUSE_BLAS")
+set (PROJECT_CFLAGS "-std=c++11 -O3 -qopenmp -DUSE_BLAS -DUSE_R")
 set (MKLROOT "$ENV{HOME}/intel/mkl")
 set (PROJECT_EXE_LINKER_FLAGS "-mkl=parallel")
 
@@ -48,6 +48,17 @@ MESSAGE(STATUS ${R_ROOT_DIR})
 MESSAGE(STATUS ${R_INCLUDE_DIRS})
 MESSAGE(STATUS ${R_LIBRARIES})
 
+## Rcpp dependency
+## ---------------------------
+#SET(RCPP_ROOT_DIR "/net/wonderland/home/yanys/R/x86_64-pc-linux-gnu-library/2.13/Rcpp")
+#SET(RCPP_INCLUDE_DIRS "${RCPP_ROOT_DIR}/include")
+#FIND_LIBRARY(RCPP_LIBRARIES Rcpp PATHS "${RCPP_ROOT_DIR}/lib")
+#IF(RCPP_LIBRARIES-NOTFOUND)
+#  MESSAGE(STATUS "Rcpp-NOTFOUND")
+#ELSE()
+#  MESSAGE(STATUS ${RCPP_LIBRARIES})
+#ENDIF()
+
 
 
 # Headers.
@@ -55,6 +66,7 @@ MESSAGE(STATUS ${R_LIBRARIES})
 include_directories("include" "frame" "external") 
 include_directories("external/BayesLogit/src") 
 include_directories(${R_INCLUDE_DIRS}) 
+include_directories(${RCPP_INCLUDE_DIRS}) 
 include_directories("$ENV{HOME}/Bayesian_mediation/RealSimulation/BF_simulation/Bayesian-Mediation-Analysis/gsl/include/gsl") 
 include_directories("$ENV{HOME}/Mixture_mediation/Gaussian-Mixture-Mediation/boost_1_61_0/boost/math/distributions")
 file (GLOB PROJECT_HDRS ${CMAKE_SOURCE_DIR}/include/*)
@@ -78,4 +90,5 @@ foreach( testsrc ${TEST_CXX_SRC} )
   target_link_libraries( "${testexe}.x" $ENV{PROJECT_NAME} )
   target_link_libraries( "${testexe}.x" ${GSL_LIBRARIES} )
   target_link_libraries( "${testexe}.x" ${R_LIBRARIES} )
+  target_link_libraries( "${testexe}.x" ${RCPP_LIBRARIES} )
 endforeach()
