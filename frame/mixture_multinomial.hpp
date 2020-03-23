@@ -409,7 +409,7 @@ class Variables
      MultiVariableNormal<T >my_mvn2( mu2, sigma2 );
      Vk_det[ 2 ] = my_mvn2.LogDeterminant();
 
-     if ( it % 100 == 0 )
+     if ( it % 10000 == 0 )
      {
        printf( "sigma_multi %.4E \n", sigma_multi ); fflush( stdout );
      }
@@ -557,7 +557,7 @@ class Variables
        r_count[ r_jk[ j ] ] += 1;
      }
 
-     if ( it % 100 == 0 ) {
+     if ( it % 1000 == 0 ) {
      printf( "r_jk0 %d r_count1 %d r_count2 %d r_count3 %d r_count4 %d \n", r_jk[ 0 ], r_count[ 0 ], r_count[ 1 ], r_count[ 2 ], r_count[ 3 ] ); fflush( stdout );
      }
 
@@ -586,7 +586,7 @@ class Variables
        //MultiVariableNormal<T> my_mvn9( temp, Vk_temp );
        //Vk_inv[ k ] = my_mvn9.Inverse();
 
-       if ( it % 50000 == 0 ) {
+       if ( it % 10000 == 0 ) {
        Vk_temp.Print();
        printf("Wishart %d \n", k); fflush( stdout ); }
      }
@@ -611,7 +611,7 @@ class Variables
      Vk_inv[ 1 ]( 0, 1 ) = 0.0;
      Vk_inv[ 1 ]( 1, 1 ) = 0.0;
 
-     if ( it % 50000 == 0 )  {
+     if ( it % 10000 == 0 )  {
      Vk_temp.Print();
      printf("Wishart %d \n", 1); fflush( stdout ); }
 
@@ -635,7 +635,7 @@ class Variables
      Vk_inv[ 2 ]( 0, 1 ) = 0.0;
      Vk_inv[ 2 ]( 1, 0 ) = 0.0;
 
-     if ( it % 50000 == 0 ) {
+     if ( it % 10000 == 0 ) {
      Vk_temp.Print();
      printf("Wishart %d \n", 2); fflush( stdout ); }
 
@@ -680,7 +680,7 @@ class Variables
       }
 
 
-      if ( it % 1000 == 0 ) {
+      if ( it % 10000 == 0 ) {
         if ( j % 200 == 0 ) {
         printf( "r_jk0 %d w_pg0 %.2E w_pg1 %.2E w_pg2 %.2E \n", r_jk[ j ], w_pg( j, 0 ), w_pg( j, 1 ), w_pg( j, 2 ) ); fflush( stdout );
         }
@@ -750,7 +750,7 @@ class Variables
        for ( int j = 0; j < q; j ++ )
        {
          b_multi( j, k ) = mvn_sample[ j ];
-         if ( j % 200 == 0 && it % 1000 == 0 ) {
+         if ( j % 200 == 0 && it % 10000 == 0 ) {
            printf( "it %d b_multi0 %.2E b_multi1 %.2E b_multi2 %.2E \n", it, b_multi( j, 0 ), b_multi( j, 1 ), b_multi( j, 2 ) ); fflush( stdout );
          }
        }
@@ -828,7 +828,7 @@ class Variables
        pi_mixtures( j, 2 ) = ( 1.0 - sigmoid( b_multi( j, 0 ) ) ) * ( 1.0 - sigmoid( b_multi( j, 1 ) ) ) * sigmoid( b_multi ( j, 2 ) );
        pi_mixtures( j, 3 ) = 1.0 - pi_mixtures( j, 0 ) - pi_mixtures( j, 1 ) - pi_mixtures( j, 2 );
 
-       if ( j % 200 == 0 && it % 1000 == 0 ) {
+       if ( j % 200 == 0 && it % 10000 == 0 ) {
          printf( "it %d pi0 %.2E pi1 %.2E pi2 %.2E \n", it, pi_mixtures( j, 0 ), pi_mixtures( j, 1 ), pi_mixtures( j, 2 ) ); fflush( stdout );
        }
      }

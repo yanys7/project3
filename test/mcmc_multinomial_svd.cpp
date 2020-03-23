@@ -8,7 +8,7 @@
 #include <hmlp_blas_lapack.h>
 
 #include <data.hpp>
-#include <mixture_multinomial.hpp>
+#include <mixture_multinomial_svd.hpp>
 
 #ifdef HMLP_MIC_AVX512
 #include <hbwmalloc.h>
@@ -52,7 +52,7 @@ int main( int argc, char *argv[] )
   //  PutRNGstate();
   //}
 
-	if ( argc == 20 )
+	if ( argc == 21 )
 	{
 		/** read parameters */
 		sscanf( argv[ 1 ], "%lu", &n );
@@ -78,7 +78,8 @@ int main( int argc, char *argv[] )
   std::string alpha_a_filename( argv[ 15 ] );
   std::string pi_mixtures_filename( argv[ 16 ]  );
   std::string Psi_filename(     argv[ 17 ] );
-  std::string D_filename(       argv[ 18 ] );
+  std::string U_filename(       argv[ 18 ] );
+  std::string EV_filename(      argv[ 19 ] );
 
   hmlp::Data<T> Y( n, 1 );
   hmlp::Data<T> M( n, q ); 
@@ -90,7 +91,8 @@ int main( int argc, char *argv[] )
   hmlp::Data<T> alpha_a( 1, q ); 
   hmlp::Data<T> pi_mixtures( q, n_mixtures );
   hmlp::Data<T> Psi( d, d );
-  hmlp::Data<T> corrD_orig( q, q );
+  hmlp::Data<T> U( q, q );
+  hmlp::Data<T> eigenVl( q, 1 );
 
   Y.readmatrix( n, 1, Y_filename );
   M.readmatrix( n, q, M_filename );
@@ -102,10 +104,11 @@ int main( int argc, char *argv[] )
   alpha_a.readmatrix( 1, q, alpha_a_filename );
   pi_mixtures.readmatrix( q, n_mixtures, pi_mixtures_filename );
   Psi.readmatrix( d, d, Psi_filename );
-  corrD_orig.readmatrix( q, q, D_filename );
+  U.readmatrix( q, q, U_filename );
+  eigenVl.readmatrix( q, 1, EV_filename );
 
 
-  mcmc::mcmc<T>( Y, A, M, C1, C2, beta_m, alpha_a, pi_mixtures, Psi, corrD_orig, n, w1, w2, q, q1, q2, burnIn, niter );
+  mcmc::mcmc<T>( Y, A, M, C1, C2, beta_m, alpha_a, pi_mixtures, Psi, U, eigenVl, n, w1, w2, q, q1, q2, burnIn, niter );
 
   Rf_endEmbeddedR(0);
   return 0;

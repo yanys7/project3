@@ -286,8 +286,13 @@ class Variables
 
 
     /** Initialize */
-    S_k.resize( 1, n_mixtures, 1.0 );
-    S_k[ 3 ] = 1.0;
+    //S_k.resize( 1, n_mixtures, 1.0 );
+    //S_k[ 3 ] = 1.0;
+    S_k.resize( 1, n_mixtures, (int)( 0.01 * q ) );
+    S_k[ 1 ] = (int)( 0.05 * q );
+    S_k[ 2 ] = (int)( 0.05 * q );
+    S_k[ 3 ] = (int)( 0.89 * q );
+
     Vk_det.resize( 1, n_mixtures, 1.0 );
     Sigma_Mixture.resize( n_mixtures );
     mu_mixture.resize( n_mixtures );
