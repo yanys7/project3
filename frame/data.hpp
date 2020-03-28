@@ -100,6 +100,57 @@ class Data : public vector<T, Allocator>
       }
     };
 
+
+    void readSubColumns(std::vector<int32_t> J, std::string infilename, std::string outfilename)
+    {
+      if (J.size() == 0) 
+      {
+        return;
+      }
+      std::cout << "input  filename: " << infilename << std::endl;
+      std::cout << "output filename: " << outfilename << std::endl;
+      std::ifstream infile(infilename.data()); 
+      std::ofstream outfile(outfilename.data());
+      std::string line;
+
+      if (infile.is_open())
+      {
+        int32_t i = 0;
+        while (std::getline(infile, line)) 
+        {
+          std::vector<std::string> tokens;
+          std::string token;
+          std::istringstream tokenStream(line);
+          while (std::getline(tokenStream, token, ',')) 
+          {
+            tokens.push_back(token);
+          }
+          if (i % 100000 == 0) 
+          {
+            printf("row: %8lu ", i); fflush(stdout);
+            std::cout << tokens[0] << std::endl;
+          }
+          outfile << tokens[ 0 ] << "," << tokens[ 1 ] << "," << tokens[ 2 ] << ",";
+          for (int32_t j = 0; j < J.size(); j ++)
+          {
+            outfile << tokens[ J[j] ];
+            if (j != J.size() - 1) 
+            {
+              outfile << ",";
+            }
+          }
+          outfile << "\n";
+          /* Increase the number of rows. */
+          i ++;
+        }
+        /* Close the file. */
+        infile.close();
+        outfile.close();
+      }
+    }
+
+
+
     template<bool TRANS = false>
     void readmatrix( std::size_t d, std::size_t n, std::string &filename )
     {

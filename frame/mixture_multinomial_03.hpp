@@ -314,7 +314,13 @@ class Variables
     }
 
     w_pg.resize( q, 3, 0.0 );
-    b_multi.resize( q, 3, -4.0 );
+    b_multi.resize( q, 3, 0.0 ); 
+    for ( int j = 0; j < q; j ++ )
+    {
+      b_multi( j, 0 ) = 1.5;
+      b_multi( j, 1 ) = -0.2;
+      b_multi( j, 2 ) = 1.5;
+    }
     a_multi.resize( q, 3, 0.5 );
 
     r_jk.resize( q, 0 );
@@ -360,9 +366,9 @@ class Variables
        
        for ( int j = 0; j < q; j ++ )
        {
-         a_multi( j, 0 ) = logit( 0.01 );
-         a_multi( j, 1 ) = logit( 0.05 / ( 1.0 - 0.01) );
-         a_multi( j, 2 ) = logit( 0.05 / ( 1.0 - 0.01 - 0.05 ) );
+         a_multi( j, 0 ) = logit( 0.89 );
+         a_multi( j, 1 ) = logit( 0.05 / ( 1.0 - 0.89 ) );
+         a_multi( j, 2 ) = logit( 0.05 / ( 1.0 - 0.89 - 0.05 ) );
        }
 
        corrD_a.resize( q, 3, 0 );
@@ -558,7 +564,7 @@ class Variables
        r_count[ r_jk[ j ] ] += 1;
      }
 
-     if ( it % 1000 == 0 ) {
+     if ( it % 100 == 0 ) {
      printf( "r_jk0 %d r_count1 %d r_count2 %d r_count3 %d r_count4 %d \n", r_jk[ 0 ], r_count[ 0 ], r_count[ 1 ], r_count[ 2 ], r_count[ 3 ] ); fflush( stdout );
      }
 
@@ -664,7 +670,7 @@ class Variables
      {
        //rpg_devroye( & ( w_pg( j, 0 ) ), & num_, & ( b_multi( j, 0 ) ), & num_ );
       w_pg( j, 0 ) = pg.draw( 1, b_multi( j, 0 ) );
-      if ( r_jk[ j ] == 0 )
+      if ( r_jk[ j ] == 3 )
       {
         w_pg( j, 1 ) = 0.0;
         w_pg( j, 2 ) = 0.0;
@@ -674,14 +680,14 @@ class Variables
         w_pg( j, 1 ) = pg.draw( 1, b_multi( j, 1 ) );
         w_pg( j, 2 ) = 0.0;
       }
-      if ( r_jk[ j ] == 2 || r_jk[ j ] == 3 )
+      if ( r_jk[ j ] == 2 || r_jk[ j ] == 0 )
       {
         w_pg( j, 1 ) = pg.draw( 1, b_multi( j, 1 ) );
         w_pg( j, 2 ) = pg.draw( 1, b_multi( j, 2 ) );
       }
 
 
-      if ( it % 10000 == 0 ) {
+      if ( it % 100 == 0 ) {
         if ( j % 200 == 0 ) {
         printf( "r_jk0 %d w_pg0 %.2E w_pg1 %.2E w_pg2 %.2E \n", r_jk[ j ], w_pg( j, 0 ), w_pg( j, 1 ), w_pg( j, 2 ) ); fflush( stdout );
         }
@@ -701,7 +707,7 @@ class Variables
      for ( int j = 0; j < q; j ++ )
      {
        corrD_a( j, 0 ) -= 0.5;
-       if ( r_jk[ j ] == 0 )
+       if ( r_jk[ j ] == 3 )
        {
          corrD_a( j, 0 ) += 1;
        }
@@ -709,7 +715,7 @@ class Variables
        {
          corrD_a( j, 1 ) += 0.5;
        }
-       if ( r_jk[ j ] > 1 )
+       if ( r_jk[ j ] == 2 || r_jk[ j ] == 0 )
        {
          corrD_a( j, 1 ) -= 0.5;
        }
@@ -717,7 +723,7 @@ class Variables
        {
          corrD_a( j, 2 ) += 0.5;
        }
-       if ( r_jk[ j ] > 2 )
+       if ( r_jk[ j ] == 0 )
        {
          corrD_a( j, 2 ) -= 0.5;
        }
@@ -759,7 +765,7 @@ class Variables
        for ( int j = 0; j < q; j ++ )
        {
          b_multi( j, k ) = mvn_sample[ j ];
-         if ( j % 200 == 0 && it % 10000 == 0 ) {
+         if ( j % 200 == 0 && it % 100 == 0 ) {
            printf( "it %d b_multi0 %.2E b_multi1 %.2E b_multi2 %.2E \n", it, b_multi( j, 0 ), b_multi( j, 1 ), b_multi( j, 2 ) ); fflush( stdout );
          }
        }
@@ -818,18 +824,22 @@ class Variables
        }
        lu1 = 1.0 / ( lu1 / 2.0 + lu );
        std::gamma_distribution<T> dist_u( hu1, lu1 );
+       if ( it % 100 == 0 ) 
+       {  
+         printf( "it %d lu1 %.2E \n", it, lu1 ); fflush( stdout );
+       }
        sigma_multi[ k ]  = 1.0 / dist_u( generator );
      }
 
      /** update pi_mixtures */
      for ( int j = 0; j < q; j ++ )
      {
-       pi_mixtures( j, 0 ) = sigmoid( b_multi( j, 0 ) );
+       pi_mixtures( j, 3 ) = sigmoid( b_multi( j, 0 ) );
        pi_mixtures( j, 1 ) = ( 1.0 - sigmoid( b_multi( j, 0 ) ) ) *  sigmoid( b_multi( j, 1 ) );
        pi_mixtures( j, 2 ) = ( 1.0 - sigmoid( b_multi( j, 0 ) ) ) * ( 1.0 - sigmoid( b_multi( j, 1 ) ) ) * sigmoid( b_multi ( j, 2 ) );
-       pi_mixtures( j, 3 ) = 1.0 - pi_mixtures( j, 0 ) - pi_mixtures( j, 1 ) - pi_mixtures( j, 2 );
+       pi_mixtures( j, 0 ) = 1.0 - pi_mixtures( j, 3 ) - pi_mixtures( j, 1 ) - pi_mixtures( j, 2 );
 
-       if ( j % 200 == 0 && it % 10000 == 0 ) {
+       if ( j % 200 == 0 && it % 100 == 0 ) {
          printf( "it %d pi0 %.2E pi1 %.2E pi2 %.2E \n", it, pi_mixtures( j, 0 ), pi_mixtures( j, 1 ), pi_mixtures( j, 2 ) ); fflush( stdout );
        }
      }
