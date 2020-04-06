@@ -8,7 +8,7 @@
 #include <hmlp_blas_lapack.h>
 
 #include <data.hpp>
-#include <mixture_multinomial.hpp>
+#include <mixture_multinomial_rd.hpp>
 
 #ifdef HMLP_MIC_AVX512
 #include <hbwmalloc.h>
