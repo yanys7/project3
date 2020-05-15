@@ -233,17 +233,23 @@ class Variables
     this->permute = permute;
 
     /** Initialize my_samples here. */
-    my_samples.resize( 499, 3 * q + 9, 0.0 );
+    my_samples.resize( 499, 3 * q + 10, 0.0 );
     //my_labels.resize( 1000, n_mixtures, 0.0 );
     my_probs.resize( 499, n_mixtures * q, 0.0 );
 
     neighbors.resize(q);
     for ( size_t i = 0; i < q; i++ ) {
       for ( size_t j = i; j < q; j++ ) {
-        if ( std::abs( CovM( i, j ) ) >= 0.15 && i != j ) {
+        if ( std::abs( CovM( i, j ) ) >= 1.0 && i != j ) {
           neighbors[ i ].push_back( j );
           neighbors[ j ].push_back( i );
         }
+      }
+    }
+
+    for ( size_t i = 0; i < q; i ++ ) {
+      if ( i % 20 == 0 ) {
+      printf( "i %4lu neighbor %4lu \n", i, neighbors[ i ].size() ); fflush( stdout );
       }
     }
 
@@ -348,7 +354,6 @@ class Variables
 
    vector<size_t> potts2_c( vector<size_t> r_jk, hmlp::Data<T> theta_0, hmlp::Data<T> theta_1 ) {
      hmlp::Data<T> prob_temp; prob_temp.resize(1, n_mixtures, 0.0);
-    // printf( "q %4lu n_mixtures %4lu theta_0.size() %4lu theta_1 %4lu prob_temp %4lu", q, n_mixtures, theta_0.size(), theta_1.size(), prob_temp.size() ); fflush( stdout );
      for ( size_t j = 0; j < q; j ++ ) {
        for ( size_t k = 0; k < n_mixtures; k ++ ) {
          prob_temp[ k ] = theta_0[ k ];
@@ -360,8 +365,8 @@ class Variables
            //{
            //  std::cout << nn << "," << r_jk.size() << std::endl;
            //  exit(-1);
-          // }
-	        // std::cout << nn << "," << r_jk.size() << std::endl;
+           // }
+ 	         // std::cout << nn << "," << r_jk.size() << std::endl;
 		      prob_temp[ r_jk[ nn ] ] += theta_1[ r_jk[ nn ] ];
        }
 
@@ -401,6 +406,38 @@ class Variables
      }
      return hamiltonian;
    }
+
+   T log_normal_pdf(T mu, T sigma, T value)
+   {
+      return  ( - std::log ( sigma * std::sqrt(2*M_PI) ) ) + ( -0.5 * std::pow( (value-mu)/sigma, 2.0 ) );
+   }
+
+   T PostDistribution( Data<T> beta_m, Data<T> alpha_a, Data<T> beta_a, T sigma_e, T sigma_g )
+   {
+     T llh1 = 0.0;
+     T llh2 = 0.0;
+
+     for ( size_t i = 0; i < n; i++ ) {
+       T meanc1 = beta_a[ 0 ] * A[ i ];
+       for ( size_t j = 0; j < q; j++ ) {
+         meanc1 += M(i, j) * beta_m[ j ];
+         llh2 += log_normal_pdf ( alpha_a[ j ] * A[ i ], std::sqrt( sigma_g ), M(i, j) );
+         if ( j % 500 == 0 && i % 500 == 0 && isinf( log_normal_pdf ( alpha_a[ j ] * A[ i ], std::sqrt( sigma_g ), M(i, j) ) ) ) 
+         {
+          printf( "logc2_pdf %.3E \n", log_normal_pdf ( alpha_a[ j ] * A[ i ], std::sqrt( sigma_g ), M(i, j) ) ); fflush( stdout );
+         }
+              
+       }
+       llh1 += log_normal_pdf ( meanc1, std::sqrt( sigma_e ), Y[ i ] );
+       if ( i % 500 == 0 && isinf( log_normal_pdf ( meanc1, std::sqrt( sigma_e ), Y[ i ] )) ) {
+        printf( "logc1_pdf %.3E \n", log_normal_pdf ( meanc1, std::sqrt( sigma_e ), Y[ i ] ) ); fflush( stdout );
+       }
+    
+     }
+     //printf( "logc1 %.3E logc2 %.3E \n", logc1, logc2 ); fflush( stdout );
+     return llh1 + llh2;
+
+   };
 
    void Iteration( size_t burnIn, size_t it )
    {
@@ -599,15 +636,15 @@ class Variables
        r_count[ r_jk[ j ] ] += 1;
      }
 
-     if ( it % 3000 == 0 ) {
+     if ( it % 5000 == 0 ) {
      printf( "r_jk0 %d r_count1 %d r_count2 %d r_count3 %d r_count4 %d \n", r_jk[ 0 ], r_count[ 0 ], r_count[ 1 ], r_count[ 2 ], r_count[ 3 ] ); fflush( stdout );
      }
 
-     if ( it % 3000 == 0 ) {
+     if ( it % 5000 == 0 ) {
      printf( "theta_01 %.2E theta_02 %.2E theta_03 %.2E theta_04 %.2E \n", theta_0[ 0 ], theta_0[ 1 ], theta_0[ 2 ], theta_0[ 3 ]); fflush( stdout );
      }
 
-     if ( it % 3000 == 0 ) {
+     if ( it % 5000 == 0 ) {
      printf( "theta_11 %.2E theta_12 %.2E theta_13 %.2E theta_14 %.2E \n", theta_1[ 0 ], theta_1[ 1 ], theta_1[ 2 ], theta_1[ 3 ]); fflush( stdout );
      }
 
@@ -637,7 +674,7 @@ class Variables
        //MultiVariableNormal<T> my_mvn9( temp, Vk_temp );
        //Vk_inv[ k ] = my_mvn9.Inverse();
 
-       if ( it % 3000 == 0 ) {
+       if ( it % 10000 == 0 ) {
        Vk_temp.Print();
        printf("Wishart %d \n", k); fflush( stdout ); }
      }
@@ -666,7 +703,7 @@ class Variables
      Vk_inv[ 1 ]( 0, 1 ) = 0.0;
      Vk_inv[ 1 ]( 1, 1 ) = 0.0;
 
-     if ( it % 3000 == 0 )  {
+     if ( it % 10000 == 0 )  {
      Vk_temp.Print();
      printf("Wishart %d \n", 1); fflush( stdout ); }
 
@@ -694,7 +731,7 @@ class Variables
      Vk_inv[ 2 ]( 0, 1 ) = 0.0;
      Vk_inv[ 2 ]( 1, 0 ) = 0.0;
 
-     if ( it % 3000 == 0 ) {
+     if ( it % 10000 == 0 ) {
      Vk_temp.Print();
      printf("Wishart %d \n", 2); fflush( stdout ); }
 
@@ -789,17 +826,19 @@ class Variables
           my_samples( count, 3* (int)q + k + 5 ) = theta_1[ k ];
         }
         
+        my_samples( count, 3* (int)q + 9 ) = PostDistribution( beta_m, alpha_a, beta_a, sigma_e, sigma_g );
+          
         count += 1;
 
       if ( count >= 499 )
       {
-        string my_samples_filename = string( "results_" ) + to_string( (int)q1 ) + to_string( (int)q2 ) + string( ".txt" );
+        string my_samples_filename = string( "results_" ) + to_string( (int)q1 ) + to_string( (int)q2 ) + string( "_" ) + to_string( (int)permute ) + string( ".txt" );
         my_samples.WriteFile( my_samples_filename.data() );
 
-	string my_probs_filename = string( "probs_" ) + to_string( (int)q1 ) + to_string( (int)q2 ) + string( ".txt" );
-	//hmlp::Data<T> output_mean = Mean( my_probs );
-	//output_mean.WriteFile( my_probs_filename.data() );
-	my_probs.WriteFile( my_probs_filename.data() );
+     	  string my_probs_filename = string( "probs_" ) + to_string( (int)q1 ) + to_string( (int)q2 ) + string( "_" ) + to_string( (int)permute ) + string( ".txt" );
+	      //hmlp::Data<T> output_mean = Mean( my_probs );
+	      //output_mean.WriteFile( my_probs_filename.data() );
+	      my_probs.WriteFile( my_probs_filename.data() );
       }
 
    }

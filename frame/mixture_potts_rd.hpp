@@ -995,6 +995,47 @@ class Variables
      std::gamma_distribution<T>  dist_a( 0.5 +  ha, 1.0 / ( beta_a[ 0 ] * beta_a[ 0 ] / 2.0 + la ) );
      sigma_a  = 1.0 / dist_a ( generator );
 
+     /** update beta_c, alpha_c */
+     for ( size_t j = 0; j < q; j ++ ) {
+	for ( size_t j1 = 0; j1 < w2; j1 ++ )
+        {
+          T mu_alpha_cj = 0.0;
+          old = alpha_c( j1, j );
+          for ( size_t i = 0; i < n; i ++ )
+          {
+            mu_alpha_cj += C2( i, j1 ) * ( res2[ j*n + i ] + alpha_c( j1, j ) * C2( i, j1 )  );
+          }
+          mu_alpha_cj = mu_alpha_cj / ( C2_2norm[ j1 ] );
+          std::normal_distribution<T> dist_alpha_c( mu_alpha_cj, std::sqrt( sigma_g / C2_2norm[ j1 ] ) );
+          alpha_c( j1, j )  = dist_alpha_c( generator );
+          for ( size_t i = 0; i < n; i ++ )
+          {
+            res2[ j*n + i ] = res2[ j*n + i ] + ( old - alpha_c( j1, j ) ) * C2( i, j1 );
+          }
+
+       } /** end for each j1 < w2 */
+
+     } /** end for each j < q */
+
+
+     for ( size_t j = 0; j < w1; j ++)
+     {
+        T mu_cj = 0.0;
+        old = beta_c[ j ];
+        for ( size_t i = 0; i < n; i ++ )
+        {
+          mu_cj += C1( i, j ) * ( res1[ i ] + C1( i, j ) * beta_c[ j ]);
+          mu_cj = mu_cj / C1_2norm[ j ];
+          std::normal_distribution<T> dist_beta_c( mu_cj, std::sqrt( sigma_e / C1_2norm[ j ] ) );
+          beta_c[ j ]  = dist_beta_c( generator );
+         }
+         for ( size_t i = 0; i < n; i ++ )
+         {
+           res1[ i ] = res1[ i ] + ( old - beta_c[ j ] ) * C1( i, j );
+         }
+
+     }
+
      /** update pi_mixtures */
      //T sum_pi = 0.0;
      //for ( size_t k = 0; k < n_mixtures; k ++ ) {

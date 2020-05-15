@@ -227,7 +227,7 @@ class Variables
 		hmlp::Data<T> &userpi_mixtures,
     hmlp::Data<T> &userPsi,
     hmlp::Data<T> &usercorrD_orig,
-		size_t n, size_t w1, size_t w2, size_t q, size_t q1, size_t q2 )
+		size_t n, size_t w1, size_t w2, size_t q, size_t q1, size_t q2, size_t permute )
 	  	: Y( userY ), A( userA ), M( userM ), C1( userC1 ), C2( userC2 ),
 	    	beta_m( userbeta_m ), alpha_a( useralpha_a ), pi_mixtures( userpi_mixtures ), Psi( userPsi ),
         corrD_orig( usercorrD_orig )
@@ -239,11 +239,12 @@ class Variables
     this->q = q;
     this->q1 = q1;
     this->q2 = q2;
+    this->permute = permute;
 
     corrD = corrD_orig;
 
     /** Initialize my_samples here. */
-    my_samples.resize( 499, 3 * q + 5, 0.0 );
+    my_samples.resize( 499, 3 * q + 6, 0.0 );
     my_probs.resize( 499, n_mixtures * q, 0.0 );
 
     unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
@@ -344,6 +345,38 @@ class Variables
     //    alpha_c.data(), w2, 1.0, res2.data(), n );
   };
 
+   T log_normal_pdf(T mu, T sigma, T value)
+   {
+      return  ( - std::log ( sigma * std::sqrt(2*M_PI) ) ) + ( -0.5 * std::pow( (value-mu)/sigma, 2.0 ) );
+   }
+
+   T PostDistribution( Data<T> beta_m, Data<T> alpha_a, Data<T> beta_a, T sigma_e, T sigma_g )
+   {
+     T llh1 = 0.0;
+     T llh2 = 0.0;
+
+     for ( size_t i = 0; i < n; i++ ) {
+       T meanc1 = beta_a[ 0 ] * A[ i ];
+       for ( size_t j = 0; j < q; j++ ) {
+         meanc1 += M(i, j) * beta_m[ j ];
+         llh2 += log_normal_pdf ( alpha_a[ j ] * A[ i ], std::sqrt( sigma_g ), M(i, j) );
+         if ( j % 500 == 0 && i % 500 == 0 && isinf( log_normal_pdf ( alpha_a[ j ] * A[ i ], std::sqrt( sigma_g ), M(i, j) ) ) ) 
+         {
+          printf( "logc2_pdf %.3E \n", log_normal_pdf ( alpha_a[ j ] * A[ i ], std::sqrt( sigma_g ), M(i, j) ) ); fflush( stdout );
+         }
+
+       }
+       llh1 += log_normal_pdf ( meanc1, std::sqrt( sigma_e ), Y[ i ] );
+       if ( i % 500 == 0 && isinf( log_normal_pdf ( meanc1, std::sqrt( sigma_e ), Y[ i ] )) ) {
+        printf( "logc1_pdf %.3E \n", log_normal_pdf ( meanc1, std::sqrt( sigma_e ), Y[ i ] ) ); fflush( stdout );
+       }
+
+     }
+     //printf( "logc1 %.3E logc2 %.3E \n", logc1, logc2 ); fflush( stdout );
+     return llh1 + llh2;
+
+   };
+
 
    void Iteration( size_t burnIn, size_t it )
    {
@@ -357,7 +390,7 @@ class Variables
      if ( it == 0 )
      {
        Residual( it );
-       
+
        for ( int j = 0; j < q; j ++ )
        {
          a_multi( j, 0 ) = logit( 0.01 );
@@ -849,15 +882,16 @@ class Variables
         my_samples( count, 3* (int)q + 2 ) = pi_mixtures[ 1 ];
         my_samples( count, 3* (int)q + 3 ) = pi_mixtures[ 2 ];
         my_samples( count, 3* (int)q + 4 ) = pi_mixtures[ 3 ];
+        my_samples( count, 3* (int)q + 5 ) = PostDistribution( beta_m, alpha_a, beta_a, sigma_e, sigma_g );
 
         count += 1;
 
       if ( count >= 499 )
       {
-        string my_samples_filename = string( "results_" ) + to_string( (int)q1 ) + to_string( (int)q2 ) + string( ".txt" );
+        string my_samples_filename = string( "results_" ) + to_string( (int)q1 ) + to_string( (int)q2 ) + string( "_" ) + to_string( (int)permute ) +  string( ".txt" );
         my_samples.WriteFile( my_samples_filename.data() );
 
-	      string my_probs_filename = string( "probs_" ) + to_string( (int)q1 ) + to_string( (int)q2 ) + string( ".txt" );
+	      string my_probs_filename = string( "probs_" ) + to_string( (int)q1 ) + to_string( (int)q2 ) +  string( "_" ) + to_string( (int)permute ) + string( ".txt" );
 	      //hmlp::Data<T> output_mean = Mean( my_probs );
 	      //output_mean.WriteFile( my_probs_filename.data() );
 	      my_probs.WriteFile( my_probs_filename.data() );
@@ -878,6 +912,8 @@ class Variables
     size_t q1;
 
     size_t q2;
+
+    size_t permute;
 
     //unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
     std::default_random_engine generator;
@@ -998,9 +1034,9 @@ void mcmc( hmlp::Data<T> &Y,
            hmlp::Data<T> &pi_mixtures,
            hmlp::Data<T> &Psi,
            hmlp::Data<T> &corrD_orig,
-	         size_t n, size_t w1, size_t w2, size_t q, size_t q1, size_t q2, size_t burnIn, size_t niter )
+	         size_t n, size_t w1, size_t w2, size_t q, size_t q1, size_t q2, size_t burnIn, size_t niter, size_t permute )
 {
-  Variables<T> variables( Y, A, M, C1, C2, beta_m, alpha_a, pi_mixtures, Psi, corrD_orig, n, w1, w2, q, q1, q2 );
+  Variables<T> variables( Y, A, M, C1, C2, beta_m, alpha_a, pi_mixtures, Psi, corrD_orig, n, w1, w2, q, q1, q2, permute );
 
   std::srand(std::time(nullptr));
 

@@ -52,7 +52,7 @@ int main( int argc, char *argv[] )
   //  PutRNGstate();
   //}
 
-	if ( argc == 20 )
+	if ( argc == 21 )
 	{
 		/** read parameters */
 		sscanf( argv[ 1 ], "%lu", &n );
@@ -63,22 +63,23 @@ int main( int argc, char *argv[] )
 		sscanf( argv[ 6 ], "%lu", &niter );
     sscanf( argv[ 7 ], "%lu", &q1 );
     sscanf( argv[ 8 ], "%lu", &q2 );
+    sscanf( argv[ 9 ], "%lu", &permute );
 	}
 	else
 	{
 		printf( "\n[usage] ./mcmc.x <n> <w> <q> <q1> <niter>\n\n" );
   }
 
-  std::string Y_filename(       argv[ 9 ] );
-  std::string M_filename(       argv[ 10 ] );
-  std::string A_filename(       argv[ 11 ] );
-  std::string C1_filename(      argv[ 12 ]  );
-  std::string C2_filename(      argv[ 13 ] ); 
-  std::string beta_m_filename(  argv[ 14 ]  );
-  std::string alpha_a_filename( argv[ 15 ] );
-  std::string pi_mixtures_filename( argv[ 16 ]  );
-  std::string Psi_filename(     argv[ 17 ] );
-  std::string D_filename(       argv[ 18 ] );
+  std::string Y_filename(       argv[ 10 ] );
+  std::string M_filename(       argv[ 11 ] );
+  std::string A_filename(       argv[ 12 ] );
+  std::string C1_filename(      argv[ 13 ]  );
+  std::string C2_filename(      argv[ 14 ] ); 
+  std::string beta_m_filename(  argv[ 15 ]  );
+  std::string alpha_a_filename( argv[ 16 ] );
+  std::string pi_mixtures_filename( argv[ 17 ]  );
+  std::string Psi_filename(     argv[ 18 ] );
+  std::string D_filename(       argv[ 19 ] );
 
   hmlp::Data<T> Y( n, 1 );
   hmlp::Data<T> M( n, q ); 
@@ -105,7 +106,7 @@ int main( int argc, char *argv[] )
   corrD_orig.readmatrix( q, q, D_filename );
 
 
-  mcmc::mcmc<T>( Y, A, M, C1, C2, beta_m, alpha_a, pi_mixtures, Psi, corrD_orig, n, w1, w2, q, q1, q2, burnIn, niter );
+  mcmc::mcmc<T>( Y, A, M, C1, C2, beta_m, alpha_a, pi_mixtures, Psi, corrD_orig, n, w1, w2, q, q1, q2, burnIn, niter, permute );
 
   Rf_endEmbeddedR(0);
   return 0;
